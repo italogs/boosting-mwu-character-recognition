@@ -1,13 +1,10 @@
+from __future__ import print_function
 import random
+import numpy as np
 
-
-# Hard-coded values for p_a and p_b
+## Fase 1 - Ler arquivo
 a = None
-p_a = []
-
 b = None
-p_b = []
-
 training_set_file = open('data/mnist_test.csv', 'r')
 for line in training_set_file:
     number = line.split(',')
@@ -18,40 +15,31 @@ for line in training_set_file:
             b = [ int(x) for x in number ]
             break
 
-print('Digito:',a[0])
-print('Digito:', b[0])
+
+## Fase 2 - Definir matriz de dados.
+print('a:',a[0])
+print('b:', b[0])
+
+# Transformando os pontos de [0,255] em igual ou diferente
+list_class = []
+for i in range(1,len(number)):
+    pixel_class = '='
+    if a[i] != b[i]:
+        pixel_class = '<>'
+    list_class.append(pixel_class)
+
+#Transformando a lista acima em matriz
+matrix_data = []
+for i in range(0,len(list_class),28):
+    matrix_data.append(list_class[i:i+28])
+matrix_data = np.matrix(matrix_data)
+
+# Exemplo para imprimir coluna 3 (nao apagar)
+# print(matrix_data[:,[3]])
+# Exemplo para imprimir linha 3 (nao apagar)
+# print(matrix_data[[3],: ])
 
 
-
-
-
-# Constant GAMMA
-GAMMA = 0.0001
-
-# Constant for TIME
-T = 10
-
-# 
-epsilon = 0.5
-
-
-classifiers = []
-
-
-t = 1
-w_a = []
-w_b = []
-
-w_a[t] = 1
-w_b[t] = 1
-
-p_a[t] = 0.5
-p_b[t] = 0.5
-
-for t in range(1,T):
-    sum_w = w_a[t+1] + w_b[t+1]
-    p_a[t+1] = w_a[t+1] / sum_w
-    p_b[t+1] = w_b[t+1,1] / sum_w
-    
-print("FIM!")
-training_set_file.close()
+## Fase 3 - Algoritmo MWU Boosting
+# Realizando a distribuicao de probabilidade 1/28*28
+p = [ 1.0/len(list_class) for x in range(len(list_class)) ]
