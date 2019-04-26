@@ -1,10 +1,45 @@
 from __future__ import print_function
 import random
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import numpy
 import time
 import sys
 GAMMA = 0.01
 n_dimensions = 28
+
+def loadDataset(path):
+    digits = []
+    training_set_file = open(path, 'r')
+    for line in training_set_file:
+        digit = line.split(',')
+        digits.append([ int(x) for x in digit ])
+    return digits
+
+
+def selectDistinctDigits(digits):
+    a = None
+    b = None
+    for digit in digits:
+        if a is None:
+            a = [ int(x) for x in digit ]
+        else:
+            if digit[0] != a[0] and b is None:
+                b = [ int(x) for x in digit ]
+                break
+    return a, b
+
+
+def filterDigits(digits, digit_a, digit_b):
+    digits_a = []
+    digits_b = []
+    for digit in digits:
+        if digit[0] == digit_a[0]:
+            digits_a.append(digit)
+        elif digit[0] == digit_b[0]:
+            digits_b.append(digit)
+    return digits_a, digits_b
+
 
 # Inicializa distribuicao de probabilidade
 def getInitialDistr():
@@ -30,6 +65,7 @@ def most_common(matrix_data,p_distr):
     return ['=',freq_equal,p_equal] if freq_equal >= freq_diff else ['!',freq_diff,p_diff]
 
 
+# Provavelmente não é isso que precisamos.
 def horizontalClassifier(matrix_data):
     p_distr = getInitialDistr()
     weak_learner = matrix_data[:1,]
@@ -66,11 +102,12 @@ def horizontalClassifier(matrix_data):
                 print('Weak-learner(down_partition)', down_partition_distr[2])
 
 
+# Provavelmente não é isso que precisamos.
 def verticalClassifier(matrix_data):
     p_distr = getInitialDistr()
     # best_result = 0
     # best_index = 0
-    # O loop abaixo faz uma separacao horizontal. lado1 = superior, lado2 = inferior
+    # O loop abaixo faz uma separacao vertical. lado1 = superior, lado2 = inferior
     # A ideia e' iterar em todas as possiveis particoes horizontais
     # TO DO: Obter a melhor particao. Jogar este loop em uma funcao separada, ja que este codigo vai ser chamado dentro do loop Boosting MWU
     for i in range(0,n_dimensions+1):
@@ -116,24 +153,32 @@ def MWU(matrix_data):
 
 
 if __name__ == "__main__":
-    ## Fase 1 - Ler arquivo
+
+    # Read the CSV dataset file.
+    digits = loadDataset('mnist_test.csv')
+
+    # Chooses the first two distinct digits from the read dataset.
     a = None
     b = None
-    training_set_file = open('mnist_train.csv', 'r')
-    for line in training_set_file:
-        number = line.split(',')
-        if a is None:
-            a = [ int(x) for x in number ]
-        else:
-            if number[0] != a[0] and b is None:
-                b = [ int(x) for x in number ]
-                break
+    a, b = selectDistinctDigits(digits)
 
+    print("\n\n Digit a = ", a[0])
+    print("\n   Digit b = ", b[0])
+
+    # Selects all digits that are either digit a or digit b.
+    # Only these digits are relevant since we want to identify them.
+    digits_a, digits_b = filterDigits(digits, a, b)
+
+    print("\n\n Number of digits a = {} : {}".format(a[0], len(digits_a)))
+    print("\n Number of digits b = {} : {}".format(b[0], len(digits_b)))
+
+
+    # TODO: Repensar código abaixo.
 
     ## Fase 2 - Definir matriz de dados.
     # Transformando os pontos de [0,255] em igual ou diferente
     list_class = []
-    for i in range(1,len(number)):
+    for i in range(1, len(a)):
         pixel_class = '='
         if a[i] != b[i]:
             pixel_class = '<>'
