@@ -188,10 +188,6 @@ class MWU:
             train_file.write("\niteration {}: Validation accuracy: {}".format(it, v_acc))
             print("\niteration {}: Validation accuracy: {}".format(it, v_acc))
 
-        train_file.write("\n\n\t{} : Final validation accuracy: {}".format(it,v_acc))
-        train_file.write("\n\n\t{} : Final test accuracy: {}".format(it,t_acc))
-        print("\n\n{} : Final validation accuracy: {}".format(it,v_acc))
-        print("\n\n{} : Final test accuracy: {}".format(it,t_acc))
         print("\n\n{} : Number of learners = {}".format(it,len(self.learners)))
         print("\n\n{} : Learners: ")
         for i in range(len(self.learners)):
@@ -207,6 +203,11 @@ class MWU:
                 train_file.write("{} ".format(self.w[i, j]))
 
         print("\n")
+
+        train_file.write("\n\n\t{} : Final validation accuracy: {}".format(it,v_acc))
+        train_file.write("\n\n\t{} : Final test accuracy: {}\n\n".format(it,t_acc))
+        print("\n\n{} : Final validation accuracy: {}".format(it,v_acc))
+        print("\n\n{} : Final test accuracy: {}\n\n".format(it,t_acc))
 
         train_file.close()
         return P
