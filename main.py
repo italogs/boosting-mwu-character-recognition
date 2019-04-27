@@ -1,205 +1,181 @@
 from __future__ import print_function
 import random
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import numpy
+# import matplotlib.pyplot as plt
+# import matplotlib.image as mpimg
+import numpy as np
 import time
 import sys
-GAMMA = 0.01
+import pandas as pd
+import keras
+from sklearn.model_selection import train_test_split
+GAMMA = 0.05
 n_dimensions = 28
-
-def loadDataset(path):
-    digits = []
-    training_set_file = open(path, 'r')
-    for line in training_set_file:
-        digit = line.split(',')
-        digits.append([ int(x) for x in digit ])
-    return digits
+number_a = 4
+number_b = 6
 
 
-def selectDistinctDigits(digits):
-    a = None
-    b = None
-    for digit in digits:
-        if a is None:
-            a = [ int(x) for x in digit ]
+def predict(x, m, w=None, voting=True, tval=number_a, fval=number_b):
+    if w is None:
+        w = np.ones_like(m)
+    y = x[:,...] * m * w
+    if voting:
+        y = np.array([ tval if np.sum( y[i,...] ) >= 0 else fval for i in range(y.shape[0]) ])
+    else:
+        tidx = y>=0
+        y[...] = fval
+        y[tidx] = tval
+        
+    return y
+      
+def accuracy(y_pred, y_true):
+    if ( len(y_pred.shape) == 3 ):
+        acc = np.zeros((y_pred.shape[1],y_pred.shape[2]))
+        for i in range(acc.shape[0]):
+            for j in range(acc.shape[1]):
+                acc[i,j] = np.sum(y_pred[:,i,j]==y_true).astype(float)
+    else:
+        acc = np.sum(y_pred==y_true).astype(float)
+
+    acc = acc / y_true.shape[0]
+    return acc
+
+def loadDataset():
+    (X_train, y_train), (X_test, y_test) = keras.datasets.mnist.load_data()
+    X_train = X_train.astype(float) / 255.
+    X_test = X_test.astype(float) / 255.
+    return X_train, y_train, X_test, y_test
+
+
+class single_clf:
+    def __init__(self, x, y, idx=None, p=None):
+        self.idx = None
+        if (idx is not None):
+            self.idx = np.unravel_index( idx, (x.shape[1],x.shape[2]))
+        self.sign = 0
+        self.train(x,y,p)
+    
+    def predict_unit(self, x, sign, i, j, posval=number_a, negval=number_b):
+        fval =  negval if sign >= 0 else  posval
+        tval =  posval if sign  > 0 else  negval
+        y = np.ones(x.shape[0])*fval
+        y[ x[:,i,j] > 0 ] =  tval
+        return y
+    
+    def train(self, x, y, p=None):
+        if p is None:
+            p = np.ones(y.shape[0])
+        if self.idx is not None:
+            hitA = np.sum((self.predict_unit(x, 1,self.idx[0],self.idx[1])==y).astype(float) * p)
+            hitB = np.sum((self.predict_unit(x,-1,self.idx[0],self.idx[1])==y).astype(float) * p)
+            self.sign = 1 if (hitA>=hitB) else -1
         else:
-            if digit[0] != a[0] and b is None:
-                b = [ int(x) for x in digit ]
+            besthit=0
+            for i in range(x.shape[1]):
+                for j in range(x.shape[2]):
+                    hitA = np.sum((self.predict_unit(x, 1,i,j)==y).astype(float) * p)
+                    hitB = np.sum((self.predict_unit(x,-1,i,j)==y).astype(float) * p)
+                    if(hitA > besthit):
+                        besthit = hitA
+                        self.sign = 1
+                        self.idx =(i,j)
+                    if(hitB > besthit):
+                        besthit = hitB
+                        self.sign = -1
+                        self.idx =(i,j)
+            
+    def predict(self, x, posval=1, negval=-1):
+        fval =  negval if self.sign >= 0 else  posval
+        tval =  posval if self.sign  > 0 else  negval
+        y = np.ones(x.shape[0])*fval
+        y[ x[:,self.idx[0],self.idx[1]] > 0 ] =  tval
+        return y
+
+class MWU:
+    def __init__(self, gamma):
+        self.gamma = gamma
+    
+    def train(self, train, valid, T=100, w=None):
+
+        x_train, y_train = train
+        x_valid, y_valid = valid
+        # print(type(x_train))
+        print((x_train>0))
+        print((x_train<=0))
+        x_train = (x_train>0).astype(float)
+        # print(type(x_train))
+        self.learners = []
+        self.t_hist = []
+        self.valid_accuracy = []     
+        self.train_accuracy = []
+        
+        eps = np.sqrt( np.log(x_train.size) / T )
+        P = np.ones(x_train.shape[0]) / x_train.shape[0]
+        self.w = np.zeros( (x_train.shape[1],x_train.shape[2]) )
+        for it in range(T):
+            ci = single_clf(x_train,y_train,p=P)
+            
+            y_p = ci.predict(x_train, posval=number_a, negval=number_b)
+            print(y_p)
+            acc = np.sum((y_p==y_train).astype(float)*P)
+            print(acc)
+            return
+            if acc < 0.5 + self.gamma:
+                print ("There is no more {}-weak-learners".format(0.5 + self.gamma))
                 break
-    return a, b
-
-
-def filterDigits(digits, digit_a, digit_b):
-    digits_a = []
-    digits_b = []
-    for digit in digits:
-        if digit[0] == digit_a[0]:
-            digits_a.append(digit)
-        elif digit[0] == digit_b[0]:
-            digits_b.append(digit)
-    return digits_a, digits_b
-
-
-# Inicializa distribuicao de probabilidade
-def getInitialDistr():
-    initial_dist = 1.0/(n_dimensions*n_dimensions)
-    p_distr = numpy.zeros(shape=(n_dimensions,n_dimensions))
-    p_distr.fill(initial_dist)
-    return p_distr
-
-# Retorna o label mais comum, a sua frequencia e a sua probabilidade
-def most_common(matrix_data,p_distr):
-    freq_equal = 0
-    p_equal = 0
-    freq_diff = 0
-    p_diff = 0
-    for i in range(len(matrix_data)):
-        for j in range(len(matrix_data[i])):
-            if(matrix_data[i,j] == '='):
-                freq_equal = freq_equal + 1
-                p_equal = p_equal + p_distr[i,j]
-            else:
-                freq_diff = freq_diff + 1
-                p_diff = p_diff + p_distr[i,j]
-    return ['=',freq_equal,p_equal] if freq_equal >= freq_diff else ['!',freq_diff,p_diff]
-
-
-# Provavelmente não é isso que precisamos.
-def horizontalClassifier(matrix_data):
-    p_distr = getInitialDistr()
-    weak_learner = matrix_data[:1,]
-    # best_result = 0
-    # best_index = 0
-    # O loop abaixo faz uma separacao horizontal. lado1 = superior, lado2 = inferior
-    # A ideia e' iterar em todas as possiveis particoes horizontais
-    # TO DO: Obter a melhor particao. Jogar este loop em uma funcao separada, ja que este codigo vai ser chamado dentro do loop Boosting MWU
-    for i in range(0,n_dimensions+1):
-
-        # Analyze an up partition containing all the first i * n_dimensions pixels.
-        up_partition = []
-        if(not(i == 0)):
-            up_partition = matrix_data[:i,]
-            down_partition = matrix_data[i:,]
-            # print("up_partition",up_partition[0])
-            up_partition_distr = most_common(up_partition, p_distr)
-            up_partition_size = len(up_partition) * len(up_partition[0])
-            up_partition_errors = up_partition_size - up_partition_distr[1]
-            # print(resultado_lado1)
-            if up_partition_distr[2] > 0.5 + GAMMA:
-                print('Weak-learner(up_partition)', up_partition_distr[2])
-
-        # Analyze a down partition containing all the last i * n_dimensions pixels.
-        down_partition = []
-        if(not(i == n_dimensions)):
-            down_partition = matrix_data[i:,]
-            # print("lado2",lado2)
-            down_partition_distr = most_common(down_partition, p_distr)
-            down_partition_size = len(down_partition) * len(down_partition[0])
-            down_partition_errors = down_partition_size - down_partition_distr[1]
-            # print(resultado_lado2)
-            if down_partition_distr[2] > 0.5 + GAMMA:
-                print('Weak-learner(down_partition)', down_partition_distr[2])
-
-
-# Provavelmente não é isso que precisamos.
-def verticalClassifier(matrix_data):
-    p_distr = getInitialDistr()
-    # best_result = 0
-    # best_index = 0
-    # O loop abaixo faz uma separacao vertical. lado1 = superior, lado2 = inferior
-    # A ideia e' iterar em todas as possiveis particoes horizontais
-    # TO DO: Obter a melhor particao. Jogar este loop em uma funcao separada, ja que este codigo vai ser chamado dentro do loop Boosting MWU
-    for i in range(0,n_dimensions+1):
-
-        # Analyze a left partition containing all the first l * n_dimensions column pixels.
-        left_partition = []
-        if(not(i == 0)):
-            left_partition = matrix_data.transpose()[:i,]
-            # print("left_partition",left_partition[0])
-            left_partition_distr = most_common(left_partition, p_distr)
-            left_partition_size = len(left_partition) * len(left_partition[0])
-            left_partition_errors = left_partition_size - left_partition_distr[1]
-            # print(resultado_lado1)
-            if left_partition_distr[2] > 0.5 + GAMMA:
-                print('Weak-learner(left_partition)', left_partition_distr[2])
-        right_partition = []
-
-        # Analyze a right partition containing all the last l * n_dimensions column pixels.
-        right_partition = []
-        if(not(i == n_dimensions)):
-            right_partition = matrix_data.transpose()[i:,:]
-            # print("lado2",lado2)
-            right_partition_distr = most_common(right_partition, p_distr)
-            right_partition_size = len(right_partition) * len(right_partition[0])
-            right_partition_errors = right_partition_size - right_partition_distr[1]
-            # print(resultado_lado2)
-            if right_partition_distr[2] > 0.5 + GAMMA:
-                print('Weak-learner(right_partition)', right_partition_distr[2])
-
-def MWU(matrix_data):
-    return 0
-
-
-
-
-    # print("Melhor separador: ",best_index, best_result)
-
-    # Loop do Boosting MWU
-    # for it in range(0,T):
-    #     print("Iteration: ",it)
-    #     weak_learner = searchWeakLearner()
-    #     print("Procurando weak-learner...")
-
-
+                
+            self.w[ci.idx[0],ci.idx[1]] += 1    
+            self.learners.append(ci)
+            miss = (y_p!=y_train)
+            P[miss] *= np.exp(eps) 
+            P = P/np.sum(P)
+            
+            ############# history log....############
+            y_p = self.predict(x_valid)
+            v_acc = accuracy(y_p,y_valid)
+            y_p = self.predict(x_train)
+            t_acc = accuracy(y_p,y_train)
+            
+            self.valid_accuracy.append(v_acc)
+            self.train_accuracy.append(t_acc)
+            self.t_hist.append(it)
+            # cnt+=1
+            ##########################################
+            
+            if it % 10 == 0:
+                print("iteration {}: Validation accuracy: {}".format(it, v_acc))    
+                
+            print("{} : Final validation accuracy: {}".format(it,v_acc))   
+        return P
+        
+    def predict(self, x, posval=number_a, negval=number_b):
+        y = np.zeros(x.shape[0])
+        for e in self.learners:
+            y += e.predict(x)
+        pos = (y>0)
+        y[pos] = posval
+        y[~pos] = negval
+        return y
+  
 if __name__ == "__main__":
-
     # Read the CSV dataset file.
-    digits = loadDataset('mnist_test.csv')
+    print("Loading dataset...")
+    X_train, y_train, X_test, y_test = loadDataset()
+    
+    df_train = pd.DataFrame( data={'y' : y_train } )
+    df_test  = pd.DataFrame( data={'y' : y_test  } )
+    df_train = df_train[ (df_train.y==number_a) | (df_train.y==number_b) ]
+    df_test = df_test[ (df_test.y==number_a) | (df_test.y==number_b) ]
 
-    # Chooses the first two distinct digits from the read dataset.
-    a = None
-    b = None
-    a, b = selectDistinctDigits(digits)
+    X_train = X_train[df_train.index,...]
+    y_train = y_train[df_train.index,...]
+    X_test = X_test[df_test.index,...]
+    y_test = y_test[df_test.index,...]
 
-    print("\n\n Digit a = ", a[0])
-    print("\n   Digit b = ", b[0])
-
-    # Selects all digits that are either digit a or digit b.
-    # Only these digits are relevant since we want to identify them.
-    digits_a, digits_b = filterDigits(digits, a, b)
-
-    print("\n\n Number of digits a = {} : {}".format(a[0], len(digits_a)))
-    print("\n Number of digits b = {} : {}".format(b[0], len(digits_b)))
-
-
-    # TODO: Repensar código abaixo.
-
-    ## Fase 2 - Definir matriz de dados.
-    # Transformando os pontos de [0,255] em igual ou diferente
-    list_class = []
-    for i in range(1, len(a)):
-        pixel_class = '='
-        if a[i] != b[i]:
-            pixel_class = '<>'
-        list_class.append(pixel_class)
-
-    #Transformando a lista acima em matriz
-    matrix_data = []
-    for i in range(0,len(list_class),n_dimensions):
-        matrix_data.append(list_class[i:i+n_dimensions])
-    matrix_data = numpy.array(matrix_data)
-
-    print("\n\n---------------\n\n")
-    print(matrix_data[:,])
-    print("\n\n\n")
-    print(matrix_data.transpose()[:5,])
-    print("\n\nmatrix_data = \n\n\t", matrix_data)
-    # Exemplo para imprimir coluna 3 (nao apagar)
-    # print(matrix_data[:,[3]])
-    # Exemplo para imprimir linha 3 (nao apagar)
-    # print(matrix_data[[3],: ])
-
-
-    ## Fase 3 - Algoritmo MWU Boosting
-horizontalClassifier(matrix_data)
+    X_train, X_valid, y_train, y_valid = train_test_split(X_train,y_train, test_size=0.2, random_state=0)
+    print("Training: {}".format(X_train.shape))
+    print("Valid: {}".format(X_valid.shape))
+    print("Testing: {}".format(X_test.shape))      
+    T = 100
+    print("T:",T)
+    mwu = MWU(GAMMA)
+    P = mwu.train( train=(X_train, y_train), valid=(X_valid,y_valid), T=T)

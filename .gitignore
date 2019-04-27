@@ -114,3 +114,4 @@ dmypy.json
 .pyre/
 data/mnist_train.csv
 data/mnist_test.csv
+mnist_test.csv
