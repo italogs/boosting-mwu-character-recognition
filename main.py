@@ -1,15 +1,12 @@
 from __future__ import print_function
 import random
-# import matplotlib.pyplot as plt
-# import matplotlib.image as mpimg
 import numpy as np
 import time
 import sys
 import pandas as pd
 import keras
 from sklearn.model_selection import train_test_split
-GAMMA = 0.05
-n_dimensions = 28
+
 number_a = 4
 number_b = 6
 
@@ -40,6 +37,7 @@ def accuracy(y_pred, y_true):
     return acc
 
 def loadDataset():
+    # download from an online repository
     (X_train, y_train), (X_test, y_test) = keras.datasets.mnist.load_data()
     X_train = X_train.astype(float) / 255.
     X_test = X_test.astype(float) / 255.
@@ -47,10 +45,8 @@ def loadDataset():
 
 
 class single_clf:
-    def __init__(self, x, y, idx=None, p=None):
+    def __init__(self, x, y, p=None):
         self.idx = None
-        if (idx is not None):
-            self.idx = np.unravel_index( idx, (x.shape[1],x.shape[2]))
         self.sign = 0
         self.train(x,y,p)
     
@@ -94,18 +90,15 @@ class MWU:
     def __init__(self, gamma):
         self.gamma = gamma
     
-    def train(self, train, valid, T=100, w=None):
+    def train(self, train, test, T=100, w=None):
 
         x_train, y_train = train
-        x_valid, y_valid = valid
-        # print(type(x_train))
-        print((x_train>0))
-        print((x_train<=0))
+        x_test, y_test = test
         x_train = (x_train>0).astype(float)
-        # print(type(x_train))
+
         self.learners = []
         self.t_hist = []
-        self.valid_accuracy = []     
+        self.test_accuracy = []     
         self.train_accuracy = []
         
         eps = np.sqrt( np.log(x_train.size) / T )
@@ -115,10 +108,7 @@ class MWU:
             ci = single_clf(x_train,y_train,p=P)
             
             y_p = ci.predict(x_train, posval=number_a, negval=number_b)
-            print(y_p)
             acc = np.sum((y_p==y_train).astype(float)*P)
-            print(acc)
-            return
             if acc < 0.5 + self.gamma:
                 print ("There is no more {}-weak-learners".format(0.5 + self.gamma))
                 break
@@ -130,21 +120,20 @@ class MWU:
             P = P/np.sum(P)
             
             ############# history log....############
-            y_p = self.predict(x_valid)
-            v_acc = accuracy(y_p,y_valid)
+            y_p = self.predict(x_test)
+            v_acc = accuracy(y_p,y_test)
             y_p = self.predict(x_train)
             t_acc = accuracy(y_p,y_train)
             
-            self.valid_accuracy.append(v_acc)
+            self.test_accuracy.append(v_acc)
             self.train_accuracy.append(t_acc)
             self.t_hist.append(it)
-            # cnt+=1
             ##########################################
             
-            if it % 10 == 0:
-                print("iteration {}: Validation accuracy: {}".format(it, v_acc))    
+
+            print("iteration {}: Validation accuracy: {}".format(it, v_acc))    
                 
-            print("{} : Final validation accuracy: {}".format(it,v_acc))   
+        print("{} : Final validation accuracy: {}".format(it,v_acc))   
         return P
         
     def predict(self, x, posval=number_a, negval=number_b):
@@ -157,25 +146,22 @@ class MWU:
         return y
   
 if __name__ == "__main__":
-    # Read the CSV dataset file.
+    
     print("Loading dataset...")
     X_train, y_train, X_test, y_test = loadDataset()
-    
+    print("Filtering data based on a ={} b = {}".format(number_a,number_b))
     df_train = pd.DataFrame( data={'y' : y_train } )
-    df_test  = pd.DataFrame( data={'y' : y_test  } )
     df_train = df_train[ (df_train.y==number_a) | (df_train.y==number_b) ]
-    df_test = df_test[ (df_test.y==number_a) | (df_test.y==number_b) ]
-
     X_train = X_train[df_train.index,...]
     y_train = y_train[df_train.index,...]
-    X_test = X_test[df_test.index,...]
-    y_test = y_test[df_test.index,...]
-
-    X_train, X_valid, y_train, y_valid = train_test_split(X_train,y_train, test_size=0.2, random_state=0)
+    X_test = []
+    y_test = []
+    X_train, X_test, y_train, y_test = train_test_split(X_train,y_train, test_size=0.2, random_state=1)
+    print("Size of data for training and testing. Format (elements,dimension,dimension)")
     print("Training: {}".format(X_train.shape))
-    print("Valid: {}".format(X_valid.shape))
-    print("Testing: {}".format(X_test.shape))      
+    print("Testing: {}".format(X_test.shape)) 
     T = 100
-    print("T:",T)
+    GAMMA = 0.05
+    print("T ={}, GAMMA = {}".format(T,GAMMA))
     mwu = MWU(GAMMA)
-    P = mwu.train( train=(X_train, y_train), valid=(X_valid,y_valid), T=T)
+    P = mwu.train( train=(X_train, y_train), test=(X_test,y_test), T=T)
