@@ -1,3 +1,11 @@
+# Algorithms and Uncertainty (2019) - PUC-Rio
+#
+# MWU Classifier to distinguish two digits based on one pixel (MNIST)
+#
+# Last updated: 27/04/2019
+#
+# Authors: Ítalo G. Santana & Rafael Azevedo M. S. Cruz
+
 from __future__ import print_function
 import random
 import numpy as np
@@ -7,22 +15,10 @@ import pandas as pd
 import keras
 from sklearn.model_selection import train_test_split
 
+# Chosen numbers to be distinguished.
 number_a = 4
 number_b = 6
 
-
-def predict(x, m, w=None, voting=True, tval=number_a, fval=number_b):
-    if w is None:
-        w = np.ones_like(m)
-    y = x[:,...] * m * w
-    if voting:
-        y = np.array([ tval if np.sum( y[i,...] ) >= 0 else fval for i in range(y.shape[0]) ])
-    else:
-        tidx = y>=0
-        y[...] = fval
-        y[tidx] = tval
-
-    return y
 
 # Computes the accuracy of a prediction given a true output y_true.
 def accuracy(y_pred, y_true):
@@ -37,6 +33,7 @@ def accuracy(y_pred, y_true):
     acc = acc / y_true.shape[0]
     return acc
 
+
 def loadDataset():
     # download from an online repository
     (X_train, y_train), (X_test, y_test) = keras.datasets.mnist.load_data()
@@ -45,8 +42,12 @@ def loadDataset():
     X_test = X_test.astype(float) / 255.
     return X_train, y_train, X_test, y_test
 
+
+
 # Single classifier for one digit which distinguishes two digits a and b based on one pixel.
 class single_clf:
+
+
     def __init__(self, x, y, p=None):
         # Position indexes for the pixel that best predicts the digits.
         self.idx = None
@@ -56,6 +57,7 @@ class single_clf:
         self.p = None
         #print("x size = {}".format(x.shape))
         self.train(x,y,p)
+
 
     # Predicts the number based on a pixel (i, j). Comparing the pixel (i, j) of
     # all the 28x28 pixel digits in x, predicts each digit.
@@ -105,6 +107,7 @@ class single_clf:
                         self.sign = -1
                         self.idx =(i,j)
 
+
     def predict(self, x, posval=1, negval=-1):
         # Predicts the digit based on the single best pixel determined during training.
         # Best pixel for prediction is (self.idx[0], self.idx[1])
@@ -114,10 +117,15 @@ class single_clf:
         y[ x[:,self.idx[0],self.idx[1]] > 0 ] =  tval
         return y
 
+
+
 # MWU Classifier for distinguishing two digits A and B.
 class MWU:
+
+
     def __init__(self, gamma):
         self.gamma = gamma
+
 
     # MWU algorithm to compute the final weight w_i of each expert i in an horizon T.
     def train(self, train, test, T=100, w=None):
@@ -199,9 +207,10 @@ class MWU:
                 train_file.write("{} ".format(self.w[i, j]))
 
         print("\n")
-        
+
         train_file.close()
         return P
+
 
     # Considers the prediction done by all the learners added (already weighted).
     def predict(self, x, posval=number_a, negval=number_b):
@@ -213,6 +222,8 @@ class MWU:
         y[pos] = posval
         y[~pos] = negval
         return y
+
+
 
 if __name__ == "__main__":
 
@@ -232,5 +243,7 @@ if __name__ == "__main__":
     T = 150
     GAMMA = 0.05
     print("T ={}, GAMMA = {}".format(T,GAMMA))
+
+    # Creates and trains a mwu classifier.
     mwu = MWU(GAMMA)
     P = mwu.train( train=(X_train, y_train), test=(X_test,y_test), T=T)
