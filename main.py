@@ -14,6 +14,7 @@ import sys
 import pandas as pd
 import keras
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 
 # Chosen numbers to be distinguished.
 number_a = 4
@@ -210,6 +211,18 @@ class MWU:
         print("\n\n{} : Final test accuracy: {}\n\n".format(it,t_acc))
 
         train_file.close()
+
+        # Plotting classfifier over iterations
+        th = np.array(self.train_accuracy)
+        x = np.array(self.t_hist)
+
+        plt.plot(x, th, label="Final classifier")
+        plt.legend()
+        plt.xlabel('Iterações') 
+        plt.ylabel('Qualidade') 
+        plt.axis([0,it + 5,0.8,1])
+        plt.show()
+
         return P
 
 
@@ -243,7 +256,7 @@ if __name__ == "__main__":
     print("Testing: {}".format(X_test.shape))
     T = 150
     GAMMA = 0.05
-    print("T ={}, GAMMA = {}".format(T,GAMMA))
+    print("T = {}, GAMMA = {}".format(T,GAMMA))
 
     # Creates and trains a mwu classifier.
     mwu = MWU(GAMMA)
