@@ -254,8 +254,10 @@ class MWU:
         train_acc = np.array(self.train_accuracy)
         test_acc = np.array(self.test_accuracy)
         x = np.array(self.t_hist)
-
-        plt.plot(x, train_acc, test_acc, label="Classificador Final")
+        
+        plt.suptitle('Classificadores Finais')
+        plt.plot(x,train_acc,label="Treino")
+        plt.plot(x,test_acc,label="Teste")
         plt.legend()
         plt.xlabel('Iterações')
         plt.ylabel('Qualidade')
