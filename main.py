@@ -216,7 +216,7 @@ class MWU:
         th = np.array(self.train_accuracy)
         x = np.array(self.t_hist)
 
-        plt.plot(x, th, label="Final classifier")
+        plt.plot(x, th, label="Classificador Final")
         plt.legend()
         plt.xlabel('Iterações') 
         plt.ylabel('Qualidade') 
