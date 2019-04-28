@@ -21,6 +21,21 @@ number_a = 4
 number_b = 6
 
 
+def predict_best_singlepixel(x, expect_y, experts, posval=number_a, negval=number_b):
+    acc_max = -1
+    best_e = None
+    for e in experts:
+        y_e = e.predict(x)
+        pos = (y_e>0)
+        y_e[pos] = posval
+        y_e[~pos] = negval
+        acc = accuracy(y_e, expect_y)
+        if acc > acc_max:
+            acc_max = acc
+
+    return acc_max, best_e
+
+
 # Computes the accuracy of a prediction given a true output y_true.
 def accuracy(y_pred, y_true):
     if ( len(y_pred.shape) == 3 ):
@@ -49,13 +64,13 @@ def loadDataset():
 class single_clf:
 
 
-    def __init__(self, x, y, p=None):
+    def __init__(self, x, y, p=None, idx=None):
         # Position indexes for the pixel that best predicts the digits.
-        self.idx = None
+        self.idx = idx
         # sign == 1 iff predicts number_a else predicts number_b.
         self.sign = 0
         # weights for each digit instance in y (this characterizes the classifier).
-        self.p = None
+        self.p = p
         #print("x size = {}".format(x.shape))
         self.train(x,y,p)
 
@@ -84,7 +99,7 @@ class single_clf:
             # hitB predicts number_b based on pixel (self.idx[0],self.idx[1]).
             hitA = np.sum((self.predict_unit(x, 1,self.idx[0],self.idx[1])==y).astype(float) * self.p)
             hitB = np.sum((self.predict_unit(x,-1,self.idx[0],self.idx[1])==y).astype(float) * self.p)
-            # If hitA >= hitB then number_a predictions were better than number_b predictions.
+            # If hitA >= hitB then number_a predictions were betIt predicts A if average occurrence of pixel in examples of A >= average occurence of the same pixel in examples of B otherwise B will be predicted.ter than number_b predictions.
             # Otherwise, number_b predictions are more accurate based for this pixel.
             self.sign = 1 if (hitA>=hitB) else -1
         else:
@@ -112,6 +127,7 @@ class single_clf:
     def predict(self, x, posval=1, negval=-1):
         # Predicts the digit based on the single best pixel determined during training.
         # Best pixel for prediction is (self.idx[0], self.idx[1])
+        # If sign == 1 then number_a is predicted. Otherwise, number_b is predicted.
         fval =  negval if self.sign >= 0 else  posval
         tval =  posval if self.sign  > 0 else  negval
         y = np.ones(x.shape[0])*fval
@@ -189,6 +205,28 @@ class MWU:
             train_file.write("\niteration {}: Validation accuracy: {}".format(it, v_acc))
             print("\niteration {}: Validation accuracy: {}".format(it, v_acc))
 
+        ############# Retrieving the best single-pixel prediction ############
+        # Predicts and computes the validation accuracy.
+        experts_y_v = self.predict_best_singlepixel(x_test)
+        # Predicts and computes the test accuracy.
+        experts_y_t = self.predict_best_singlepixel(x_train)
+
+        acc_max = -1.0
+        for y_e in experts_y_v:
+            acc = accuracy(y_e, y_test)
+            if acc > acc_max:
+                acc_max = acc
+
+        print("\niteration {}: Best weighted single-pixel validation accuracy (test set): {}".format(it, acc_max))
+
+        acc_max = -1.0
+        for y_e in experts_y_t:
+            acc = accuracy(y_e, y_train)
+            if acc > acc_max:
+                acc_max = acc
+
+        print("\niteration {}: Best weighted single-pixel validation accuracy (train set): {}".format(it, acc_max))
+
         print("\n\n{} : Number of learners = {}".format(it,len(self.learners)))
         print("\n\n{} : Learners: ")
         for i in range(len(self.learners)):
@@ -213,13 +251,14 @@ class MWU:
         train_file.close()
 
         # Plotting classfifier over iterations
-        th = np.array(self.train_accuracy)
+        train_acc = np.array(self.train_accuracy)
+        test_acc = np.array(self.test_accuracy)
         x = np.array(self.t_hist)
 
-        plt.plot(x, th, label="Classificador Final")
+        plt.plot(x, train_acc, test_acc, label="Classificador Final")
         plt.legend()
-        plt.xlabel('Iterações') 
-        plt.ylabel('Qualidade') 
+        plt.xlabel('Iterações')
+        plt.ylabel('Qualidade')
         plt.axis([0,it + 5,0.8,1])
         plt.show()
 
@@ -229,7 +268,9 @@ class MWU:
     # Considers the prediction done by all the learners added (already weighted).
     def predict(self, x, posval=number_a, negval=number_b):
         y = np.zeros(x.shape[0])
+
         # Predicts the digits value based on the contribution of each learner.
+        # e.predict returns an array y with values 1 and -1 (1 stands for number_a and -1 stands for number_b).
         for e in self.learners:
             y += e.predict(x)
         pos = (y>0)
@@ -237,6 +278,21 @@ class MWU:
         y[~pos] = negval
         return y
 
+    def predict_best_singlepixel(self, x, posval=number_a, negval=number_b):
+
+        experts_y = np.zeros((len(self.learners), x.shape[0]))
+
+        # Predicts the digits value based on the contribution of one single learner (one single pixel).
+        # e.predict returns an array y with values 1 and -1 (1 stands for number_a and -1 stands for number_b).
+        counter = 0
+        for e in self.learners:
+            experts_y[counter] += e.predict(x)
+            pos = (experts_y[counter]>0)
+            experts_y[counter][pos] = posval
+            experts_y[counter][~pos] = negval
+            counter = counter + 1
+
+        return experts_y
 
 
 if __name__ == "__main__":
@@ -261,3 +317,13 @@ if __name__ == "__main__":
     # Creates and trains a mwu classifier.
     mwu = MWU(GAMMA)
     P = mwu.train( train=(X_train, y_train), test=(X_test,y_test), T=T)
+
+    #x_train = (X_train>0).astype(float)
+    #x_test = (X_test>0).astype(float)
+    #experts = [ single_clf(X_train, y_train, idx=idx) for idx in range(x_train.shape[1]*x_train.shape[2]) ]
+
+    #acc_train_singlepixel, e_sp_train = predict_best_singlepixel(x_train, y_train, experts)
+    #acc_test_singlepixel, e_sp_test = predict_best_singlepixel(x_test, y_test, experts)
+
+    #print("\nBest single-pixel accuracy (train set): {}, pixel= {}".format(acc_train_singlepixel, e_sp_train.idx))
+    #print("\nBest single-pixel accuracy (test set): {}, pixel= {}".format(acc_test_singlepixel, e_sp_test.idx))
