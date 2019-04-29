@@ -32,6 +32,7 @@ def predict_best_singlepixel(x, expect_y, experts, posval=number_a, negval=numbe
         acc = accuracy(y_e, expect_y)
         if acc > acc_max:
             acc_max = acc
+            best_e = e
 
     return acc_max, best_e
 
@@ -211,22 +212,6 @@ class MWU:
         # Predicts and computes the test accuracy.
         experts_y_t = self.predict_best_singlepixel(x_train)
 
-        acc_max = -1.0
-        for y_e in experts_y_v:
-            acc = accuracy(y_e, y_test)
-            if acc > acc_max:
-                acc_max = acc
-
-        print("\niteration {}: Best weighted single-pixel validation accuracy (test set): {}".format(it, acc_max))
-
-        acc_max = -1.0
-        for y_e in experts_y_t:
-            acc = accuracy(y_e, y_train)
-            if acc > acc_max:
-                acc_max = acc
-
-        print("\niteration {}: Best weighted single-pixel validation accuracy (train set): {}".format(it, acc_max))
-
         print("\n\n{} : Number of learners = {}".format(it,len(self.learners)))
         print("\n\n{} : Learners: ")
         for i in range(len(self.learners)):
@@ -243,10 +228,38 @@ class MWU:
 
         print("\n")
 
-        train_file.write("\n\n\t{} : Final validation accuracy: {}".format(it,v_acc))
-        train_file.write("\n\n\t{} : Final test accuracy: {}\n\n".format(it,t_acc))
-        print("\n\n{} : Final validation accuracy: {}".format(it,v_acc))
-        print("\n\n{} : Final test accuracy: {}\n\n".format(it,t_acc))
+        acc_max = -1.0
+        acc_min = 1.1
+        for y_e in experts_y_v:
+            acc = accuracy(y_e, y_test)
+            if acc > acc_max:
+                acc_max = acc
+            if acc < acc_min:
+                acc_min = acc
+
+        train_file.write("\niteration {}: Best weighted single-pixel validation accuracy (test set): {}".format(it, acc_max))
+        print("\niteration {}: Best weighted single-pixel validation accuracy (test set): {}".format(it, acc_max))
+        train_file.write("\niteration {}: Worst weighted single-pixel validation accuracy (test set): {}".format(it, acc_min))
+        print("\niteration {}: Worst weighted single-pixel validation accuracy (test set): {}".format(it, acc_min))
+
+        acc_max = -1.0
+        acc_min = 1.1
+        for y_e in experts_y_t:
+            acc = accuracy(y_e, y_train)
+            if acc > acc_max:
+                acc_max = acc
+            if acc < acc_min:
+                acc_min = acc
+
+        train_file.write("\niteration {}: Best weighted single-pixel validation accuracy (train set): {}".format(it, acc_max))
+        print("\niteration {}: Best weighted single-pixel validation accuracy (train set): {}".format(it, acc_max))
+        train_file.write("\niteration {}: Worst weighted single-pixel validation accuracy (train set): {}".format(it, acc_min))
+        print("\niteration {}: Worst weighted single-pixel validation accuracy (train set): {}".format(it, acc_min))
+
+        train_file.write("\n\n\t{} : Final validation accuracy (test set): {}".format(it,v_acc))
+        train_file.write("\n\n\t{} : Final test accuracy (train set): {}\n\n".format(it,t_acc))
+        print("\n\n{} : Final validation accuracy (test set): {}".format(it,v_acc))
+        print("\n\n{} : Final test accuracy (train set): {}\n\n".format(it,t_acc))
 
         train_file.close()
 
@@ -254,7 +267,7 @@ class MWU:
         train_acc = np.array(self.train_accuracy)
         test_acc = np.array(self.test_accuracy)
         x = np.array(self.t_hist)
-        
+
         plt.suptitle('Classificadores Finais')
         plt.plot(x,train_acc,label="Treino")
         plt.plot(x,test_acc,label="Teste")
@@ -320,12 +333,16 @@ if __name__ == "__main__":
     mwu = MWU(GAMMA)
     P = mwu.train( train=(X_train, y_train), test=(X_test,y_test), T=T)
 
-    #x_train = (X_train>0).astype(float)
-    #x_test = (X_test>0).astype(float)
-    #experts = [ single_clf(X_train, y_train, idx=idx) for idx in range(x_train.shape[1]*x_train.shape[2]) ]
+    x_train = (X_train>0).astype(float)
+    x_test = (X_test>0).astype(float)
+    print("opop {} ioio {}".format(x_train.shape[1], x_train.shape[2]))
+    experts = []
+    for idx_row in range(x_train.shape[1]):
+        for idx_column in range(x_train.shape[2]):
+            experts.append(single_clf(X_train, y_train, idx=(idx_row, idx_column)))
 
-    #acc_train_singlepixel, e_sp_train = predict_best_singlepixel(x_train, y_train, experts)
-    #acc_test_singlepixel, e_sp_test = predict_best_singlepixel(x_test, y_test, experts)
+    acc_train_singlepixel, e_sp_train = predict_best_singlepixel(x_train, y_train, experts)
+    acc_test_singlepixel, e_sp_test = predict_best_singlepixel(x_test, y_test, experts)
 
-    #print("\nBest single-pixel accuracy (train set): {}, pixel= {}".format(acc_train_singlepixel, e_sp_train.idx))
-    #print("\nBest single-pixel accuracy (test set): {}, pixel= {}".format(acc_test_singlepixel, e_sp_test.idx))
+    print("\nBest single-pixel accuracy (train set): {}, pixel= {}".format(acc_train_singlepixel, e_sp_train.idx))
+    print("\nBest single-pixel accuracy (test set): {}, pixel= {}".format(acc_test_singlepixel, e_sp_test.idx))
